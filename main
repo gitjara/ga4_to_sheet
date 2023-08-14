@@ -1,0 +1,94 @@
+from google.analytics.data_v1beta import BetaAnalyticsDataClient
+from google.analytics.data_v1beta.types import (
+    DateRange,
+    Dimension,
+    Metric,
+    RunReportRequest,
+)
+from google.oauth2 import service_account
+import json
+import gspread
+import time
+from datetime import datetime, timedelta
+from oauth2client.service_account import ServiceAccountCredentials
+from datetime import datetime, timedelta, date
+
+# Google Sheets authorization
+scope = ['https://spreadsheets.google.com/feeds',
+         'https://www.googleapis.com/auth/drive','https://www.googleapis.com/auth/analytics.readonly']
+credentials = ServiceAccountCredentials.from_json_keyfile_name('PATH to your Service acc file', scope)
+gc = gspread.authorize(credentials)
+spreadsheet = gc.open_by_key('Your google sheet doc id')
+worksheet = spreadsheet.worksheet('Your sheet name')
+
+# GA4 authorization
+property_id="your property id"
+service_account_file = ''PATH to your Service acc file''
+
+
+# Get the current date
+today = date.today()
+yesterday = today - timedelta(days=1)
+# Define start and end dates
+start_date = date(2023, 8, 1) #You can use start_date = yesterday
+end_date = yesterday #You can use end_date = yesterday
+
+
+# Request example
+def sample_run_report(property_id,scope):
+
+    with open(service_account_file, 'r') as f:
+        credentials_info = json.load(f)
+
+    credentials = service_account.Credentials.from_service_account_info(credentials_info)
+    credentials = credentials.with_scopes(scope)
+    client = BetaAnalyticsDataClient(credentials=credentials)
+    # You can find the metrics you need at https://ga-dev-tools.google/ga4/dimensions-metrics-explorer/
+    request = RunReportRequest(
+        property=f"properties/{property_id}",
+        dimensions=[
+            Dimension(name="dateHour"),
+            Dimension(name="googleAdsAdGroupId"),
+            Dimension(name="googleAdsAdGroupName"),
+            Dimension(name="eventName"),
+            Dimension(name="googleAdsCampaignName"),
+            Dimension(name="googleAdsKeyword"),
+            Dimension(name="country"),
+            Dimension(name="defaultChannelGroup")
+            
+        ],
+        metrics=[
+            Metric(name="activeUsers"),
+            Metric(name="conversions")
+            ],
+        date_ranges=[DateRange(start_date=str(start_date), end_date=str(end_date))],
+    )
+    response = client.run_report(request)
+
+    print("Report result:")
+    for row in response.rows:
+        print([dim.value for dim in row.dimension_values], [met.value for met in row.metric_values])
+
+    upload_to_sheet(response.rows)
+
+def upload_to_sheet(results):
+    for row in results:
+        data = []
+        for index, dim in enumerate(row.dimension_values):
+            # If this is a date and time value (we find it by index)
+            if index == 0:
+                # Convert string to datetime format
+                date_time_obj = datetime.strptime(dim.value, "%Y%m%d%H")
+                # To control the time zone
+                date_time_obj = date_time_obj - timedelta(hours=0)
+                # Convert datetime back to string
+                date_time_str = date_time_obj.strftime("%Y-%m-%d %H:%M:%S")
+                data.append(date_time_str)
+            else:
+                data.append(dim.value)
+        data += [met.value for met in row.metric_values]
+        time.sleep(1)
+        worksheet.append_row(data)
+
+if __name__ == "__main__":
+    sample_run_report(property_id,scope)
