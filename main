@@ -23,7 +23,7 @@ worksheet = spreadsheet.worksheet('Your sheet name')
 
 # GA4 authorization
 property_id="your property id"
-service_account_file = ''PATH to your Service acc file''
+service_account_file = 'PATH to your Service acc file'
 
 
 # Get the current date
